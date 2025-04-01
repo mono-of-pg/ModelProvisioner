@@ -23,6 +23,8 @@ spec:
         env:
         - name: SLEEP_INTERVAL
           value: "60"
+        - name: DEBUG
+          value: "false"
         resources:
           requests:
             cpu: 100m

@@ -52,6 +52,23 @@ type DeleteModelPayload struct {
 	ID string `json:"id"`
 }
 
+// **Debug Mode Configuration**
+var debugMode bool
+
+func init() {
+	if os.Getenv("DEBUG") == "true" {
+		debugMode = true
+	}
+}
+
+// obfuscateKey obfuscates the API key for logging
+func obfuscateKey(key string) string {
+	if len(key) < 6 {
+		return "REDACTED"
+	}
+	return key[:4] + "..REDACTED.." + key[len(key)-2:]
+}
+
 // readConfig reads and parses the ConfigMap YAML file
 func readConfig(path string) (*Config, error) {
 	data, err := ioutil.ReadFile(path)
@@ -74,26 +91,43 @@ func getModels(backendURL, apiKey string) ([]string, error) {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if debugMode {
+		obfuscatedKey := obfuscateKey(apiKey)
+		log.Printf("Fetching models: URL=%s, Method=GET, Headers=map[Authorization:Bearer %s]", backendURL+"/models", obfuscatedKey)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if debugMode {
+		log.Printf("Response body from %s/models: %s", backendURL, string(body))
+	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("non-200 status: %s", resp.Status)
+		if debugMode {
+			log.Printf("Error fetching models: Status=%d, Body=%s", resp.StatusCode, string(body))
+		}
+		return nil, fmt.Errorf("non-200 status: %s, body: %s", resp.Status, string(body))
 	}
 	var result struct {
 		Data []struct {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, err
 	}
 	models := make([]string, len(result.Data))
 	for i, m := range result.Data {
 		models[i] = m.ID
+	}
+	if debugMode {
+		log.Printf("Fetched models from %s: %v", backendURL, models)
 	}
 	return models, nil
 }
@@ -106,20 +140,39 @@ func getCurrentModels(litellmURL, litellmApiKey string) ([]CurrentModelEntry, er
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+litellmApiKey)
+	if debugMode {
+		obfuscatedKey := obfuscateKey(litellmApiKey)
+		log.Printf("Fetching current models: URL=%s, Method=GET, Headers=map[Authorization:Bearer %s]", litellmURL+"/model/info", obfuscatedKey)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if debugMode {
+		log.Printf("Response body from %s/model/info: %s", litellmURL, string(body))
+	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("non-200 status: %s", resp.Status)
+		if debugMode {
+			log.Printf("Error fetching current models: Status=%d, Body=%s", resp.StatusCode, string(body))
+		}
+		return nil, fmt.Errorf("non-200 status: %s, body: %s", resp.Status, string(body))
 	}
 	var result struct {
 		Data []CurrentModelEntry `json:"data"`
 	}
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, err
+	}
+	if debugMode {
+		for _, m := range result.Data {
+			log.Printf("Current model: %s from %s", m.ModelName, m.LitellmParams.ApiBase)
+		}
 	}
 	return result.Data, nil
 }
@@ -129,6 +182,10 @@ func addModel(litellmURL, litellmApiKey string, entry DesiredModelEntry) error {
 	payload, err := json.Marshal(entry)
 	if err != nil {
 		return err
+	}
+	if debugMode {
+		obfuscatedKey := obfuscateKey(litellmApiKey)
+		log.Printf("Adding model: URL=%s, Method=POST, Headers=map[Content-Type:application/json Authorization:Bearer %s], Payload=%s", litellmURL+"/model/new", obfuscatedKey, string(payload))
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("POST", litellmURL+"/model/new", bytes.NewBuffer(payload))
@@ -142,8 +199,18 @@ func addModel(litellmURL, litellmApiKey string, entry DesiredModelEntry) error {
 		return err
 	}
 	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("non-200 status: %s", resp.Status)
+		if debugMode {
+			log.Printf("Error adding model %s: Status=%d, Body=%s", entry.ModelName, resp.StatusCode, string(body))
+		}
+		return fmt.Errorf("non-200 status: %s, body: %s", resp.Status, string(body))
+	}
+	if debugMode {
+		log.Printf("Successfully added model %s: Status=200, Body=%s", entry.ModelName, string(body))
 	}
 	return nil
 }
@@ -154,6 +221,10 @@ func removeModel(litellmURL, litellmApiKey string, id string) error {
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		return err
+	}
+	if debugMode {
+		obfuscatedKey := obfuscateKey(litellmApiKey)
+		log.Printf("Removing model: URL=%s, Method=POST, Headers=map[Content-Type:application/json Authorization:Bearer %s], Payload=%s", litellmURL+"/model/delete", obfuscatedKey, string(jsonPayload))
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("POST", litellmURL+"/model/delete", bytes.NewBuffer(jsonPayload))
@@ -167,8 +238,18 @@ func removeModel(litellmURL, litellmApiKey string, id string) error {
 		return err
 	}
 	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("non-200 status: %s", resp.Status)
+		if debugMode {
+			log.Printf("Error removing model with ID %s: Status=%d, Body=%s", id, resp.StatusCode, string(body))
+		}
+		return fmt.Errorf("non-200 status: %s, body: %s", resp.Status, string(body))
+	}
+	if debugMode {
+		log.Printf("Successfully removed model with ID %s: Status=200, Body=%s", id, string(body))
 	}
 	return nil
 }
@@ -215,7 +296,7 @@ func main() {
 			apiKeyPath := "/etc/secrets/" + backend.Name
 			apiKey, err := ioutil.ReadFile(apiKeyPath)
 			if err != nil {
-				log.Printf("Error reading API key for %s: %v", backend.Name, err)
+				log.Printf("Error reading API key for'announced %s: %v", backend.Name, err)
 				continue
 			}
 
@@ -255,6 +336,12 @@ func main() {
 		for _, entry := range desiredModels {
 			key := fmt.Sprintf("%s|%s", entry.ModelName, entry.LitellmParams.ApiBase)
 			desiredSet[key] = entry
+		}
+
+		// Optional debug logging for model counts
+		if debugMode {
+			log.Printf("Current models from configured backends: %d", len(currentSet))
+			log.Printf("Desired models: %d", len(desiredSet))
 		}
 
 		// Determine entries to add
