@@ -14,9 +14,9 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 ## Prerequisites
 
 - A Kubernetes cluster.
-- LiteLLM deployed n DB mode with an accessible API (e.g., `http://litellm.api.svc:4000`).
+- LiteLLM deployed in DB mode and STORE_MODEL_IN_DB set to true.
 - Locally hosted backend services (e.g., Ollama) with OpenAI-compatible `/models` endpoints.
-- Docker registry access to push the built image.
+- Docker registry access to push the built image (or use the prebuilt image from ghcr).
 
 ## Files
 
@@ -34,3 +34,20 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
    ```bash
    docker build -t myregistry/modelprovisioner:latest .
    docker push myregistry/modelprovisioner:latest
+
+2. **Modify Deployment yaml**
+
+   Change image to your repo.
+   If needed, enable debug by setting the environment variable to true.
+
+3. **Deploy on Kubernetes**
+
+   ```bash
+   cd k8s
+   kubectl create ns <your_namespace>
+   kubectl -n <your_namespace> create -f .
+
+4. **Watch ModelProvisioner doing it's magic***
+
+   ```bash
+   kubectl -n <your_namespace> logs deployment/modelprovisioner -f
