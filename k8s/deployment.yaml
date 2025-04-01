@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: configurator
-        image: myregistry/modelprovisioner:latest
+        image: ghcr.io/mono-of-pg/modelprovisioner:main
         volumeMounts:
         - name: config
           mountPath: /etc/config
