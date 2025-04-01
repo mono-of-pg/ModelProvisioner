@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modelprovisioner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: modelprovisioner
+  template:
+    metadata:
+      labels:
+        app: modelprovisioner
+    spec:
+      containers:
+      - name: configurator
+        image: myregistry/modelprovisioner:latest
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+        - name: secrets
+          mountPath: /etc/secrets
+        env:
+        - name: SLEEP_INTERVAL
+          value: "60"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+      volumes:
+      - name: config
+        configMap:
+          name: modelprovisioner-config
+      - name: secrets
+        secret:
+          secretName: modelprovisioner-secrets

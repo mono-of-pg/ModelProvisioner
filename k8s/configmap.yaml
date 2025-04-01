@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: modelprovisioner-config
+data:
+  config.yaml: |
+    litellm:
+      url: http://litellm.api.svc:4000
+    backends:
+      - name: ollama
+        url: http://ollama.llm.svc:11434/v1
+      - name: ollama2
+        url: http://ollama2.llm.svc:11434/v1
