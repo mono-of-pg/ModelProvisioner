@@ -262,7 +262,7 @@ func main() {
 		sleepInterval = 60
 	}
 
-	log.Println("Starting LiteLLM Configurator")
+	log.Println("Starting LiteLLM ModelProvisioner (https://github.com/mono-of-pg/ModelProvisioner)"
 	for {
 		// Read configuration
 		config, err := readConfig("/etc/config/config.yaml")
