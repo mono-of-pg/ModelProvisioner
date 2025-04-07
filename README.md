@@ -10,6 +10,8 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 - **Periodic Updates**: Checks backends every 60 seconds (configurable).
 - **Local Focus**: Only manages locally hosted providers with `/models` endpoints.
 - **Protection of Unconfigured Models**: Models from endpoints not in the ConfigMap are ignored and protected from deletion.
+- **Capability Discovery**: Optionally enable discovery for each backend to automatically test and set model capabilities like tool use and vision.
+- **Regex Overrides**: Define regex patterns to manually set or override model capabilities, providing precise control over the configuration.
 
 ## Prerequisites
 
@@ -17,6 +19,16 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 - LiteLLM deployed in DB mode and STORE_MODEL_IN_DB set to true.
 - Locally hosted backend services (e.g., Ollama) with OpenAI-compatible `/models` endpoints.
 - Docker registry access to push the built image (or use the prebuilt image from ghcr).
+
+## Configuration
+The ModelProvisioner is configured via a Kubernetes ConfigMap and Secrets. The ConfigMap defines the LiteLLM URL and the backends to manage, including the features for capability discovery and overrides.
+
+- Discovery: Add a discovery: true field to each backend where you want to enable capability discovery. When enabled, the provisioner will test each new model for tool use and vision capabilities by sending requests to the backend's /chat/completions endpoint.
+- Overrides: Add an overrides section to each backend, containing a list of regex patterns and their associated capabilities. This allows you to manually set or override capabilities for models matching the regex patterns.
+- Efficient Discovery: Capability discovery is only performed for models newly added to LiteLLM, avoiding unnecessary queries for existing models.
+
+## Note
+Enabling discovery will send test requests to the backend for each new model. Ensure that your backend can handle these requests without hitting rate limits or incurring excessive costs. Refer to `k8s/configmap.yaml` for an example configuration and update it with your backend details, including the discovery and overrides fields as needed.
 
 ## Files
 

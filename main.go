@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -20,8 +21,13 @@ type Config struct {
 		URL string `yaml:"url"`
 	} `yaml:"litellm"`
 	Backends []struct {
-		Name string `yaml:"name"`
-		URL  string `yaml:"url"`
+		Name      string `yaml:"name"`
+		URL       string `yaml:"url"`
+		Discovery bool   `yaml:"discovery"` // Enable/disable capability discovery for this backend
+		Overrides []struct {
+			Regex        string                 `yaml:"regex"`
+			Capabilities map[string]interface{} `yaml:"capabilities"`
+		} `yaml:"overrides"` // Regex-based capability overrides for models
 	} `yaml:"backends"`
 }
 
@@ -45,6 +51,7 @@ type DesiredModelEntry struct {
 		ApiBase string `json:"api_base"`
 		ApiKey  string `json:"api_key"`
 	} `json:"litellm_params"`
+	ModelInfo map[string]interface{} `json:"model_info"`
 }
 
 // DeleteModelPayload represents the payload for deleting a model from LiteLLM
@@ -52,7 +59,7 @@ type DeleteModelPayload struct {
 	ID string `json:"id"`
 }
 
-// **Debug Mode Configuration**
+// Debug Mode Configuration
 var debugMode bool
 
 func init() {
@@ -254,6 +261,97 @@ func removeModel(litellmURL, litellmApiKey string, id string) error {
 	return nil
 }
 
+// testToolUse checks if the model supports function calling (tool use)
+func testToolUse(backendURL, apiKey, model string) bool {
+	client := &http.Client{Timeout: 10 * time.Second}
+	payload := map[string]interface{}{
+		"model": model,
+		"messages": []map[string]string{
+			{"role": "user", "content": "What is the weather?"},
+		},
+		"tools": []map[string]interface{}{
+			{
+				"type": "function",
+				"function": map[string]interface{}{
+					"name": "get_weather",
+					"parameters": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"location": map[string]string{"type": "string"},
+						},
+					},
+				},
+			},
+		},
+	}
+	jsonPayload, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", backendURL+"/chat/completions", bytes.NewBuffer(jsonPayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 200 {
+		var result map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+			if choices, ok := result["choices"].([]interface{}); ok && len(choices) > 0 {
+				if choice, ok := choices[0].(map[string]interface{}); ok {
+					if message, ok := choice["message"].(map[string]interface{}); ok {
+						if _, hasToolCalls := message["tool_calls"]; hasToolCalls {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// testVision checks if the model can process image inputs using a base64-encoded image
+func testVision(backendURL, apiKey, model string) bool {
+	client := &http.Client{Timeout: 10 * time.Second}
+	// Base64-encoded transparent pixel image
+	base64Image := "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg=="
+	payload := map[string]interface{}{
+		"model": model,
+		"messages": []map[string]interface{}{
+			{
+				"role": "user",
+				"content": []map[string]interface{}{
+					{"type": "text", "text": "Describe this image"},
+					{"type": "image_url", "image_url": base64Image},
+				},
+			},
+		},
+	}
+	jsonPayload, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", backendURL+"/chat/completions", bytes.NewBuffer(jsonPayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == 200 // Success implies vision support
+}
+
+// applyOverrides applies capabilities from regex matches
+func applyOverrides(model string, overrides []struct {
+	Regex        string                 `yaml:"regex"`
+	Capabilities map[string]interface{} `yaml:"capabilities"`
+}) map[string]interface{} {
+	for _, override := range overrides {
+		if matched, _ := regexp.MatchString(override.Regex, model); matched {
+			return override.Capabilities
+		}
+	}
+	return nil
+}
+
 func main() {
 	// Get sleep interval from environment, default to 60 seconds
 	sleepIntervalStr := os.Getenv("SLEEP_INTERVAL")
@@ -296,7 +394,7 @@ func main() {
 			apiKeyPath := "/etc/secrets/" + backend.Name
 			apiKey, err := ioutil.ReadFile(apiKeyPath)
 			if err != nil {
-				log.Printf("Error reading API key for'announced %s: %v", backend.Name, err)
+				log.Printf("Error reading API key for backend %s: %v", backend.Name, err)
 				continue
 			}
 
@@ -318,7 +416,16 @@ func main() {
 						ApiBase: backend.URL,
 						ApiKey:  string(apiKey),
 					},
+					ModelInfo: make(map[string]interface{}),
 				}
+
+				// Apply overrides first
+				if overrideCaps := applyOverrides(model, backend.Overrides); overrideCaps != nil {
+					for k, v := range overrideCaps {
+						entry.ModelInfo[k] = v
+					}
+				}
+
 				desiredModels = append(desiredModels, entry)
 			}
 		}
@@ -338,12 +445,6 @@ func main() {
 			desiredSet[key] = entry
 		}
 
-		// Optional debug logging for model counts
-		if debugMode {
-			log.Printf("Current models from configured backends: %d", len(currentSet))
-			log.Printf("Desired models: %d", len(desiredSet))
-		}
-
 		// Determine entries to add
 		var toAdd []DesiredModelEntry
 		for key, entry := range desiredSet {
@@ -360,8 +461,40 @@ func main() {
 			}
 		}
 
-		// Add new models
+		// Add new models with capability discovery if enabled
 		for _, entry := range toAdd {
+			backendURL := entry.LitellmParams.ApiBase
+			model := entry.ModelName
+			apiKey := entry.LitellmParams.ApiKey
+
+			// Find the backend config for this model
+			var backendConfig *struct {
+				Name      string `yaml:"name"`
+				URL       string `yaml:"url"`
+				Discovery bool   `yaml:"discovery"`
+				Overrides []struct {
+					Regex        string                 `yaml:"regex"`
+					Capabilities map[string]interface{} `yaml:"capabilities"`
+				} `yaml:"overrides"`
+			}
+			for _, b := range config.Backends {
+				if b.URL == backendURL {
+					backendConfig = &b
+					break
+				}
+			}
+
+			// Perform capability discovery only for new models if enabled
+			if backendConfig != nil && backendConfig.Discovery {
+				// Only test if capability not overridden
+				if _, exists := entry.ModelInfo["supports_function_calling"]; !exists {
+					entry.ModelInfo["supports_function_calling"] = testToolUse(backendURL, apiKey, model)
+				}
+				if _, exists := entry.ModelInfo["supports_vision"]; !exists {
+					entry.ModelInfo["supports_vision"] = testVision(backendURL, apiKey, model)
+				}
+			}
+
 			log.Printf("Adding model %s from %s", entry.ModelName, entry.LitellmParams.ApiBase)
 			err := addModel(config.Litellm.URL, string(litellmApiKey), entry)
 			if err != nil {
