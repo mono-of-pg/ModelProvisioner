@@ -21,14 +21,26 @@ type Config struct {
 		URL string `yaml:"url"`
 	} `yaml:"litellm"`
 	Backends []struct {
-		Name      string `yaml:"name"`
-		URL       string `yaml:"url"`
-		Discovery bool   `yaml:"discovery"` // Enable/disable capability discovery for this backend
-		Overrides []struct {
+		Name        string `yaml:"name"`
+		URL         string `yaml:"url"`
+		Discovery   bool   `yaml:"discovery"`
+		FilterRegex string `yaml:"filter_regex"` // Added filter regex
+		Overrides   []struct {
 			Regex        string                 `yaml:"regex"`
 			Capabilities map[string]interface{} `yaml:"capabilities"`
-		} `yaml:"overrides"` // Regex-based capability overrides for models
+		} `yaml:"overrides"`
 	} `yaml:"backends"`
+}
+
+// DesiredModelEntry represents a model entry to be added to LiteLLM
+type DesiredModelEntry struct {
+	ModelName     string `json:"model_name"`
+	LitellmParams struct {
+		Model   string `json:"model"`
+		ApiBase string `json:"api_base"`
+		ApiKey  string `json:"api_key"`
+	} `json:"litellm_params"`
+	ModelInfo map[string]interface{} `json:"model_info"`
 }
 
 // CurrentModelEntry represents a model entry fetched from LiteLLM's /model/info
@@ -43,23 +55,11 @@ type CurrentModelEntry struct {
 	} `json:"model_info"`
 }
 
-// DesiredModelEntry represents a model entry to be added to LiteLLM
-type DesiredModelEntry struct {
-	ModelName     string `json:"model_name"`
-	LitellmParams struct {
-		Model   string `json:"model"`
-		ApiBase string `json:"api_base"`
-		ApiKey  string `json:"api_key"`
-	} `json:"litellm_params"`
-	ModelInfo map[string]interface{} `json:"model_info"`
-}
-
 // DeleteModelPayload represents the payload for deleting a model from LiteLLM
 type DeleteModelPayload struct {
 	ID string `json:"id"`
 }
 
-// Debug Mode Configuration
 var debugMode bool
 
 func init() {
@@ -68,7 +68,6 @@ func init() {
 	}
 }
 
-// obfuscateKey obfuscates the API key for logging
 func obfuscateKey(key string) string {
 	if len(key) < 6 {
 		return "REDACTED"
@@ -76,7 +75,6 @@ func obfuscateKey(key string) string {
 	return key[:4] + "..REDACTED.." + key[len(key)-2:]
 }
 
-// readConfig reads and parses the ConfigMap YAML file
 func readConfig(path string) (*Config, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -90,7 +88,6 @@ func readConfig(path string) (*Config, error) {
 	return &config, nil
 }
 
-// getModels queries a backend's /models endpoint
 func getModels(backendURL, apiKey string) ([]string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", backendURL+"/models", nil)
@@ -139,7 +136,6 @@ func getModels(backendURL, apiKey string) ([]string, error) {
 	return models, nil
 }
 
-// getCurrentModels fetches the current model entries from LiteLLM's /model/info
 func getCurrentModels(litellmURL, litellmApiKey string) ([]CurrentModelEntry, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", litellmURL+"/model/info", nil)
@@ -184,7 +180,6 @@ func getCurrentModels(litellmURL, litellmApiKey string) ([]CurrentModelEntry, er
 	return result.Data, nil
 }
 
-// addModel adds a new model deployment to LiteLLM via /model/new
 func addModel(litellmURL, litellmApiKey string, entry DesiredModelEntry) error {
 	payload, err := json.Marshal(entry)
 	if err != nil {
@@ -222,7 +217,6 @@ func addModel(litellmURL, litellmApiKey string, entry DesiredModelEntry) error {
 	return nil
 }
 
-// removeModel removes a model deployment from LiteLLM via /model/delete
 func removeModel(litellmURL, litellmApiKey string, id string) error {
 	payload := DeleteModelPayload{ID: id}
 	jsonPayload, err := json.Marshal(payload)
@@ -261,7 +255,6 @@ func removeModel(litellmURL, litellmApiKey string, id string) error {
 	return nil
 }
 
-// testToolUse checks if the model supports function calling (tool use)
 func testToolUse(backendURL, apiKey, model string) bool {
 	client := &http.Client{Timeout: 10 * time.Second}
 	payload := map[string]interface{}{
@@ -310,10 +303,8 @@ func testToolUse(backendURL, apiKey, model string) bool {
 	return false
 }
 
-// testVision checks if the model can process image inputs using a base64-encoded image
 func testVision(backendURL, apiKey, model string) bool {
 	client := &http.Client{Timeout: 10 * time.Second}
-	// Base64-encoded transparent pixel image
 	base64Image := "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg=="
 	payload := map[string]interface{}{
 		"model": model,
@@ -336,10 +327,9 @@ func testVision(backendURL, apiKey, model string) bool {
 		return false
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode == 200 // Success implies vision support
+	return resp.StatusCode == 200
 }
 
-// applyOverrides applies capabilities from regex matches
 func applyOverrides(model string, overrides []struct {
 	Regex        string                 `yaml:"regex"`
 	Capabilities map[string]interface{} `yaml:"capabilities"`
@@ -353,7 +343,6 @@ func applyOverrides(model string, overrides []struct {
 }
 
 func main() {
-	// Get sleep interval from environment, default to 60 seconds
 	sleepIntervalStr := os.Getenv("SLEEP_INTERVAL")
 	sleepInterval, err := strconv.Atoi(sleepIntervalStr)
 	if err != nil {
@@ -362,7 +351,6 @@ func main() {
 
 	log.Println("Starting LiteLLM ModelProvisioner (https://github.com/mono-of-pg/ModelProvisioner)")
 	for {
-		// Read configuration
 		config, err := readConfig("/etc/config/config.yaml")
 		if err != nil {
 			log.Println("Error reading config:", err)
@@ -370,7 +358,6 @@ func main() {
 			continue
 		}
 
-		// Read LiteLLM API key
 		litellmApiKey, err := ioutil.ReadFile("/etc/secrets/litellm")
 		if err != nil {
 			log.Println("Error reading LiteLLM API key:", err)
@@ -378,7 +365,6 @@ func main() {
 			continue
 		}
 
-		// Get current model entries from LiteLLM
 		currentModels, err := getCurrentModels(config.Litellm.URL, string(litellmApiKey))
 		if err != nil {
 			log.Println("Error getting current models from LiteLLM:", err)
@@ -386,7 +372,6 @@ func main() {
 			continue
 		}
 
-		// Build desired model entries from configured backends
 		var desiredModels []DesiredModelEntry
 		configuredBackends := make(map[string]bool)
 		for _, backend := range config.Backends {
@@ -398,6 +383,15 @@ func main() {
 				continue
 			}
 
+			var filterRegex *regexp.Regexp
+			if backend.FilterRegex != "" {
+				filterRegex, err = regexp.Compile(backend.FilterRegex)
+				if err != nil {
+					log.Printf("Invalid filter regex for backend %s: %v", backend.Name, err)
+					continue
+				}
+			}
+
 			models, err := getModels(backend.URL, string(apiKey))
 			if err != nil {
 				log.Printf("Error getting models from %s: %v", backend.Name, err)
@@ -405,6 +399,9 @@ func main() {
 			}
 
 			for _, model := range models {
+				if filterRegex != nil && !filterRegex.MatchString(model) {
+					continue // Skip models that don't match the regex
+				}
 				entry := DesiredModelEntry{
 					ModelName: model,
 					LitellmParams: struct {
@@ -419,7 +416,6 @@ func main() {
 					ModelInfo: make(map[string]interface{}),
 				}
 
-				// Apply overrides first
 				if overrideCaps := applyOverrides(model, backend.Overrides); overrideCaps != nil {
 					for k, v := range overrideCaps {
 						entry.ModelInfo[k] = v
@@ -430,7 +426,6 @@ func main() {
 			}
 		}
 
-		// Create sets for comparison
 		currentSet := make(map[string]CurrentModelEntry)
 		for _, entry := range currentModels {
 			if configuredBackends[entry.LitellmParams.ApiBase] {
@@ -445,7 +440,6 @@ func main() {
 			desiredSet[key] = entry
 		}
 
-		// Determine entries to add
 		var toAdd []DesiredModelEntry
 		for key, entry := range desiredSet {
 			if _, exists := currentSet[key]; !exists {
@@ -453,7 +447,6 @@ func main() {
 			}
 		}
 
-		// Determine entries to remove (only from configured backends)
 		var toRemove []CurrentModelEntry
 		for key, entry := range currentSet {
 			if _, exists := desiredSet[key]; !exists {
@@ -461,18 +454,17 @@ func main() {
 			}
 		}
 
-		// Add new models with capability discovery if enabled
 		for _, entry := range toAdd {
 			backendURL := entry.LitellmParams.ApiBase
 			model := entry.ModelName
 			apiKey := entry.LitellmParams.ApiKey
 
-			// Find the backend config for this model
 			var backendConfig *struct {
-				Name      string `yaml:"name"`
-				URL       string `yaml:"url"`
-				Discovery bool   `yaml:"discovery"`
-				Overrides []struct {
+				Name        string `yaml:"name"`
+				URL         string `yaml:"url"`
+				Discovery   bool   `yaml:"discovery"`
+				FilterRegex string `yaml:"filter_regex"`
+				Overrides   []struct {
 					Regex        string                 `yaml:"regex"`
 					Capabilities map[string]interface{} `yaml:"capabilities"`
 				} `yaml:"overrides"`
@@ -484,9 +476,7 @@ func main() {
 				}
 			}
 
-			// Perform capability discovery only for new models if enabled
 			if backendConfig != nil && backendConfig.Discovery {
-				// Only test if capability not overridden
 				if _, exists := entry.ModelInfo["supports_function_calling"]; !exists {
 					entry.ModelInfo["supports_function_calling"] = testToolUse(backendURL, apiKey, model)
 				}
@@ -502,7 +492,6 @@ func main() {
 			}
 		}
 
-		// Remove obsolete models (only from configured backends)
 		for _, entry := range toRemove {
 			log.Printf("Removing model %s from %s with ID %s", entry.ModelName, entry.LitellmParams.ApiBase, entry.ModelInfo.ID)
 			err := removeModel(config.Litellm.URL, string(litellmApiKey), entry.ModelInfo.ID)
