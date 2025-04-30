@@ -19,3 +19,6 @@ data:
       - name: ollama2
         url: http://ollama2.llm.svc:11434/v1
         discovery: true
+      - name: openrouter
+        url: https://openrouter.ai/api/v1
+        filter_regex: ".*:free$"

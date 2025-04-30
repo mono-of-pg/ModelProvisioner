@@ -12,6 +12,7 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 - **Protection of Unconfigured Models**: Models from endpoints not in the ConfigMap are ignored and protected from deletion.
 - **Capability Discovery**: Optionally enable discovery for each backend to automatically test and set model capabilities like tool use and vision.
 - **Regex Overrides**: Define regex patterns to manually set or override model capabilities, providing precise control over the configuration.
+- **Regex Filter**: Filter models by regex to only add matching models.
 
 ## Prerequisites
 
@@ -21,7 +22,7 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 - Docker registry access to push the built image (or use the prebuilt image from ghcr).
 
 ## Configuration
-The ModelProvisioner is configured via a Kubernetes ConfigMap and Secrets. The ConfigMap defines the LiteLLM URL and the backends to manage, including the features for capability discovery and overrides.
+The ModelProvisioner is configured via a Kubernetes ConfigMap and Secrets. The ConfigMap defines the LiteLLM URL and the backends to manage, including the features for capability discovery and overrides as well as regex filtering.
 
 - Discovery: Add a discovery: true field to each backend where you want to enable capability discovery. When enabled, the provisioner will test each new model for tool use and vision capabilities by sending requests to the backend's /chat/completions endpoint.
 - Overrides: Add an overrides section to each backend, containing a list of regex patterns and their associated capabilities. This allows you to manually set or override capabilities for models matching the regex patterns.
