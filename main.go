@@ -379,7 +379,9 @@ func main() {
 			apiKeyPath := "/etc/secrets/" + backend.Name
 			apiKey, err := ioutil.ReadFile(apiKeyPath)
 			if err != nil {
-				log.Printf("API key not found for backend %s, using BLANK", backend.Name)
+				if debugMode {
+					log.Printf("API key not found for backend %s, using BLANK", backend.Name)
+				}
 				apiKey = []byte("BLANK")
 			}
 
