@@ -22,7 +22,7 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 - Docker registry access to push the built image (or use the prebuilt image from ghcr).
 
 ## Configuration
-The ModelProvisioner is configured via a Kubernetes ConfigMap and Secrets. The ConfigMap defines the LiteLLM URL and the backends to manage, including the features for capability discovery and overrides as well as regex filtering.
+The ModelProvisioner is configured via a Kubernetes ConfigMap and Secrets. The ConfigMap defines the LiteLLM URL and the backends to manage, including the features for capability discovery and overrides as well as regex filtering. If no secret is provided for a backend, the provisioner will use "BLANK" as the API key.
 
 - Discovery: Add a discovery: true field to each backend where you want to enable capability discovery. When enabled, the provisioner will test each new model for tool use and vision capabilities by sending requests to the backend's /chat/completions endpoint.
 - Overrides: Add an overrides section to each backend, containing a list of regex patterns and their associated capabilities. This allows you to manually set or override capabilities for models matching the regex patterns.
