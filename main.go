@@ -24,11 +24,12 @@ type Config struct {
 		Name        string `yaml:"name"`
 		URL         string `yaml:"url"`
 		Discovery   bool   `yaml:"discovery"`
-		FilterRegex string `yaml:"filter_regex"` // Added filter regex
+		FilterRegex string `yaml:"filter_regex"`
 		Overrides   []struct {
 			Regex        string                 `yaml:"regex"`
 			Capabilities map[string]interface{} `yaml:"capabilities"`
 		} `yaml:"overrides"`
+		ModelInfoDefaults map[string]interface{} `yaml:"model_info_defaults"`
 	} `yaml:"backends"`
 }
 
@@ -416,6 +417,10 @@ func main() {
 						ApiKey:  string(apiKey),
 					},
 					ModelInfo: make(map[string]interface{}),
+				}
+
+				for k, v := range backend.ModelInfoDefaults {
+					entry.ModelInfo[k] = v
 				}
 
 				if overrideCaps := applyOverrides(model, backend.Overrides); overrideCaps != nil {
