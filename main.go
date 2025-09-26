@@ -480,7 +480,7 @@ func main() {
 				}
 			}
 
-			if backendConfig != nil && backendConfig.Discovery {
+			if backendConfig.Discovery {
 				if _, exists := entry.ModelInfo["supports_function_calling"]; !exists {
 					entry.ModelInfo["supports_function_calling"] = testToolUse(backendURL, apiKey, model)
 				}
