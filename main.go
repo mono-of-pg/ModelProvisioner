@@ -20,17 +20,23 @@ type Config struct {
 	Litellm struct {
 		URL string `yaml:"url"`
 	} `yaml:"litellm"`
-	Backends []struct {
-		Name        string `yaml:"name"`
-		URL         string `yaml:"url"`
-		Discovery   bool   `yaml:"discovery"`
-		FilterRegex string `yaml:"filter_regex"`
-		Overrides   []struct {
-			Regex        string                 `yaml:"regex"`
-			Capabilities map[string]interface{} `yaml:"capabilities"`
-		} `yaml:"overrides"`
-		ModelInfoDefaults map[string]interface{} `yaml:"model_info_defaults"`
-	} `yaml:"backends"`
+	Backends []Backend `yaml:"backends"`
+}
+
+// Backend defines the configuration for each backend
+type Backend struct {
+	Name             string                 `yaml:"name"`
+	URL              string                 `yaml:"url"`
+	Discovery        bool                   `yaml:"discovery"`
+	FilterRegex      string                 `yaml:"filter_regex"` // Added filter regex
+	Overrides        []Override             `yaml:"overrides"`
+	ModelInfoDefaults map[string]interface{} `yaml:"model_info_defaults"` // Added model_info_defaults
+}
+
+// Override defines the override configuration for each backend
+type Override struct {
+	Regex        string                 `yaml:"regex"`
+	Capabilities map[string]interface{} `yaml:"capabilities"`
 }
 
 // DesiredModelEntry represents a model entry to be added to LiteLLM
@@ -466,19 +472,10 @@ func main() {
 			model := entry.ModelName
 			apiKey := entry.LitellmParams.ApiKey
 
-			var backendConfig *struct {
-				Name        string `yaml:"name"`
-				URL         string `yaml:"url"`
-				Discovery   bool   `yaml:"discovery"`
-				FilterRegex string `yaml:"filter_regex"`
-				Overrides   []struct {
-					Regex        string                 `yaml:"regex"`
-					Capabilities map[string]interface{} `yaml:"capabilities"`
-				} `yaml:"overrides"`
-			}
+			var backendConfig Backend
 			for _, b := range config.Backends {
 				if b.URL == backendURL {
-					backendConfig = &b
+					backendConfig = b
 					break
 				}
 			}
