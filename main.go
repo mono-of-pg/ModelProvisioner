@@ -337,10 +337,7 @@ func testVision(backendURL, apiKey, model string) bool {
 	return resp.StatusCode == 200
 }
 
-func applyOverrides(model string, overrides []struct {
-	Regex        string                 `yaml:"regex"`
-	Capabilities map[string]interface{} `yaml:"capabilities"`
-}) map[string]interface{} {
+func applyOverrides(model string, overrides []Override) map[string]interface{} {
 	for _, override := range overrides {
 		if matched, _ := regexp.MatchString(override.Regex, model); matched {
 			return override.Capabilities
