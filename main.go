@@ -28,9 +28,10 @@ type Backend struct {
 	Name             string                 `yaml:"name"`
 	URL              string                 `yaml:"url"`
 	Discovery        bool                   `yaml:"discovery"`
-	FilterRegex      string                 `yaml:"filter_regex"` // Added filter regex
+	FilterRegex      string                 `yaml:"filter_regex"`
 	Overrides        []Override             `yaml:"overrides"`
-	ModelInfoDefaults map[string]interface{} `yaml:"model_info_defaults"` // Added model_info_defaults
+	ModelInfoDefaults map[string]interface{} `yaml:"model_info_defaults"`
+	LiteLLMParamsDefaults map[string]interface{} `yaml:"litellm_params_defaults"`
 }
 
 // Override defines the override configuration for each backend
@@ -422,6 +423,18 @@ func main() {
 					ModelInfo: make(map[string]interface{}),
 				}
 
+				// Merge LiteLLMParamsDefaults into LitellmParams
+				for k, v := range backend.LiteLLMParamsDefaults {
+					switch k {
+					case "model", "api_base", "api_key":
+						log.Printf("Error: Forbidden key '%s' found in LiteLLMParamsDefaults. This key cannot be set as a default.", k)
+						continue
+					default:
+						entry.LitellmParams[k] = v
+					}
+				}
+
+				// Merge ModelInfoDefaults into ModelInfo				
 				for k, v := range backend.ModelInfoDefaults {
 					entry.ModelInfo[k] = v
 				}
