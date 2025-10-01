@@ -42,23 +42,16 @@ type Override struct {
 
 // DesiredModelEntry represents a model entry to be added to LiteLLM
 type DesiredModelEntry struct {
-	ModelName     string `json:"model_name"`
-	LitellmParams struct {
-		Model   string `json:"model"`
-		ApiBase string `json:"api_base"`
-		ApiKey  string `json:"api_key"`
-	} `json:"litellm_params"`
-	ModelInfo map[string]interface{} `json:"model_info"`
+	ModelName     string                 `json:"model_name"`
+	LitellmParams map[string]interface{} `json:"litellm_params"`
+	ModelInfo     map[string]interface{} `json:"model_info"`
 }
 
 // CurrentModelEntry represents a model entry fetched from LiteLLM's /model/info
 type CurrentModelEntry struct {
-	ModelName     string `json:"model_name"`
-	LitellmParams struct {
-		Model   string `json:"model"`
-		ApiBase string `json:"api_base"`
-	} `json:"litellm_params"`
-	ModelInfo struct {
+	ModelName     string                 `json:"model_name"`
+	LitellmParams map[string]interface{} `json:"litellm_params"`
+	ModelInfo     struct {
 		ID string `json:"id"`
 	} `json:"model_info"`
 }
@@ -409,18 +402,11 @@ func main() {
 				if filterRegex != nil && !filterRegex.MatchString(model) {
 					continue // Skip models that don't match the regex
 				}
-				entry := DesiredModelEntry{
-					ModelName: model,
-					LitellmParams: struct {
-						Model   string `json:"model"`
-						ApiBase string `json:"api_base"`
-						ApiKey  string `json:"api_key"`
-					}{
-						Model:   "openai/" + model,
-						ApiBase: backend.URL,
-						ApiKey:  string(apiKey),
-					},
-					ModelInfo: make(map[string]interface{}),
+
+				litellmParams := map[string]interface{}{
+					"model":   "openai/" + model,
+					"api_base": backend.URL,
+					"api_key":  string(apiKey),
 				}
 
 				// Merge LiteLLMParamsDefaults into LitellmParams
@@ -430,8 +416,14 @@ func main() {
 						log.Printf("Error: Forbidden key '%s' found in LiteLLMParamsDefaults. This key cannot be set as a default.", k)
 						continue
 					default:
-						entry.LitellmParams[k] = v
+						litellmParams[k] = v
 					}
+				}
+
+				entry := DesiredModelEntry{
+					ModelName: model,
+					LitellmParams: litellmParams,
+					ModelInfo: make(map[string]interface{}),
 				}
 
 				// Merge ModelInfoDefaults into ModelInfo				
