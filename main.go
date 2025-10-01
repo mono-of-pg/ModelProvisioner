@@ -175,7 +175,7 @@ func getCurrentModels(litellmURL, litellmApiKey string) ([]CurrentModelEntry, er
 	}
 	if debugMode {
 		for _, m := range result.Data {
-			log.Printf("Current model: %s from %s", m.ModelName, m.LitellmParams.ApiBase)
+			log.Printf("Current model: %s from %s", m.ModelName, m.LitellmParams["api_base"].(string))
 		}
 	}
 	return result.Data, nil
@@ -443,15 +443,15 @@ func main() {
 
 		currentSet := make(map[string]CurrentModelEntry)
 		for _, entry := range currentModels {
-			if configuredBackends[entry.LitellmParams.ApiBase] {
-				key := fmt.Sprintf("%s|%s", entry.ModelName, entry.LitellmParams.ApiBase)
+			if configuredBackends[entry.LitellmParams["api_base"].(string)] {
+				key := fmt.Sprintf("%s|%s", entry.ModelName, entry.LitellmParams["api_base"].(string))
 				currentSet[key] = entry
 			}
 		}
 
 		desiredSet := make(map[string]DesiredModelEntry)
 		for _, entry := range desiredModels {
-			key := fmt.Sprintf("%s|%s", entry.ModelName, entry.LitellmParams.ApiBase)
+			key := fmt.Sprintf("%s|%s", entry.ModelName, entry.LitellmParams["api_base"].(string))
 			desiredSet[key] = entry
 		}
 
@@ -470,9 +470,9 @@ func main() {
 		}
 
 		for _, entry := range toAdd {
-			backendURL := entry.LitellmParams.ApiBase
+			backendURL := entry.LitellmParams["api_base"].(string)
 			model := entry.ModelName
-			apiKey := entry.LitellmParams.ApiKey
+			apiKey := entry.LitellmParams["api_key"].(string)
 
 			var backendConfig Backend
 			for _, b := range config.Backends {
@@ -491,7 +491,7 @@ func main() {
 				}
 			}
 
-			log.Printf("Adding model %s from %s", entry.ModelName, entry.LitellmParams.ApiBase)
+			log.Printf("Adding model %s from %s", entry.ModelName, entry.LitellmParams["api_base"].(string))
 			err := addModel(config.Litellm.URL, string(litellmApiKey), entry)
 			if err != nil {
 				log.Printf("Error adding model %s: %v", entry.ModelName, err)
@@ -499,7 +499,7 @@ func main() {
 		}
 
 		for _, entry := range toRemove {
-			log.Printf("Removing model %s from %s with ID %s", entry.ModelName, entry.LitellmParams.ApiBase, entry.ModelInfo.ID)
+			log.Printf("Removing model %s from %s with ID %s", entry.ModelName, entry.LitellmParams["api_base"].(string), entry.ModelInfo.ID)
 			err := removeModel(config.Litellm.URL, string(litellmApiKey), entry.ModelInfo.ID)
 			if err != nil {
 				log.Printf("Error removing model %s with ID %s: %v", entry.ModelName, entry.ModelInfo.ID, err)
