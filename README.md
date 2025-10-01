@@ -13,7 +13,8 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 - **Capability Discovery**: Optionally enable discovery for each backend to automatically test and set model capabilities like tool use and vision.
 - **Regex Overrides**: Define regex patterns to manually set or override model capabilities, providing precise control over the configuration.
 - **Regex Filter**: Filter models by regex to only add matching models.
-- **Model Info defaults**: Specify defaults for model_info that will be added to the model configuration.
+- **LiteLLM Params defaults**: Specify defaults for litellm_params that will be added to the model configuration.
+- **Model Info defaults**: Specify defaults that will be added to the model_info section.
 
 ## Prerequisites
 
