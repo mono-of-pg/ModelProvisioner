@@ -31,3 +31,15 @@ data:
           some_key: "some value"
         litellm_params_defaults:
           some_other_key: 42
+      - name: vllm1
+        type: vllm
+        url: http://my-vllm-endpoint.llm.svc:8000
+        models_endpoint: /v1/models
+        model_format: "hosted_vllm/{model}"
+        discovery: true
+      - name: ollama3
+        type: ollama
+        url: http://ollama2.llm.svc:11434
+        generic_params:
+          api_key: "another-special-key"
+          custom_header: "another-value"

@@ -15,6 +15,8 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 - **Regex Filter**: Filter models by regex to only add matching models.
 - **LiteLLM Params defaults**: Specify defaults for litellm_params that will be added to the model configuration.
 - **Model Info defaults**: Specify defaults that will be added to the model_info section.
+- **Arbitrary Endpoint Support**: Added support for arbitrary endpoints beyond OpenAI-compatible ones, including vLLM, Ollama, and generic endpoints.
+- **Generic Parameters**: Specify arbitrary parameters to be passed to LiteLLM for any endpoint.
 
 ## Prerequisites
 
@@ -29,6 +31,10 @@ The ModelProvisioner is configured via a Kubernetes ConfigMap and Secrets. The C
 - Discovery: Add a discovery: true field to each backend where you want to enable capability discovery. When enabled, the provisioner will test each new model for tool use and vision capabilities by sending requests to the backend's /chat/completions endpoint.
 - Overrides: Add an overrides section to each backend, containing a list of regex patterns and their associated capabilities. This allows you to manually set or override capabilities for models matching the regex patterns.
 - Efficient Discovery: Capability discovery is only performed for models newly added to LiteLLM, avoiding unnecessary queries for existing models.
+- Endpoint Types: Add a `type` field to specify endpoint types (e.g., `vllm`, `ollama`) to enable automatic model naming and endpoint detection. Note: For vLLM, the model name will be automatically prefixed with "hosted_vllm/" to comply with LiteLLM requirements.
+- Custom Models Endpoints: Add a `models_endpoint` field to specify a custom endpoint for fetching models (e.g., `/v1/models`).
+- Model Format: Add a `model_format` field to specify a custom model naming format, including `{model}` placeholder for dynamic replacement.
+- Generic Parameters: Add a `generic_params` section to specify arbitrary parameters to be passed to LiteLLM for any endpoint.
 
 ## Note
 Enabling discovery will send test requests to the backend for each new model. Ensure that your backend can handle these requests without hitting rate limits or incurring excessive costs. Refer to `k8s/configmap.yaml` for an example configuration and update it with your backend details, including the discovery and overrides fields as needed.

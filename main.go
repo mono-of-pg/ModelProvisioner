@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -26,12 +27,17 @@ type Config struct {
 // Backend defines the configuration for each backend
 type Backend struct {
 	Name             string                 `yaml:"name"`
+	Type             string                 `yaml:"type"`
 	URL              string                 `yaml:"url"`
+	ModelsEndpoint   string                 `yaml:"models_endpoint"`
+	ModelFormat      string                 `yaml:"model_format"`
 	Discovery        bool                   `yaml:"discovery"`
 	FilterRegex      string                 `yaml:"filter_regex"`
 	Overrides        []Override             `yaml:"overrides"`
 	ModelInfoDefaults map[string]interface{} `yaml:"model_info_defaults"`
 	LiteLLMParamsDefaults map[string]interface{} `yaml:"litellm_params_defaults"`
+	// GenericParams allows specifying arbitrary parameters to be passed to LiteLLM
+	GenericParams map[string]interface{} `yaml:"generic_params,omitempty"`
 }
 
 // Override defines the override configuration for each backend
@@ -89,16 +95,46 @@ func readConfig(path string) (*Config, error) {
 	return &config, nil
 }
 
-func getModels(backendURL, apiKey string) ([]string, error) {
+func getModels(backendURL, apiKey string, backendType string, modelsEndpoint string) ([]string, error) {
+	actualEndpoint := backendURL + "/models"
+	if modelsEndpoint != "" {
+		actualEndpoint = backendURL + modelsEndpoint
+	}
+	
+	if backendType == "vllm" {
+		// vLLM typically uses /v1/models or /models
+		if modelsEndpoint == "" {
+			// Try common vLLM endpoints
+			endpointsToTry := []string{"/v1/models", "/models"}
+			for _, endpoint := range endpointsToTry {
+				actualEndpoint = backendURL + endpoint
+				models, err := getModelsFromEndpoint(actualEndpoint, apiKey)
+				if err == nil {
+					return models, nil
+				}
+			}
+			// If none worked, fall back to default behavior
+		} else {
+			models, err := getModelsFromEndpoint(actualEndpoint, apiKey)
+			if err == nil {
+				return models, nil
+			}
+		}
+	}
+	
+	return getModelsFromEndpoint(actualEndpoint, apiKey)
+}
+
+func getModelsFromEndpoint(endpoint, apiKey string) ([]string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", backendURL+"/models", nil)
+	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	if debugMode {
 		obfuscatedKey := obfuscateKey(apiKey)
-		log.Printf("Fetching models: URL=%s, Method=GET, Headers=map[Authorization:Bearer %s]", backendURL+"/models", obfuscatedKey)
+		log.Printf("Fetching models: URL=%s, Method=GET, Headers=map[Authorization:Bearer %s]", endpoint, obfuscatedKey)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -110,7 +146,7 @@ func getModels(backendURL, apiKey string) ([]string, error) {
 		return nil, err
 	}
 	if debugMode {
-		log.Printf("Response body from %s/models: %s", backendURL, string(body))
+		log.Printf("Response body from %s: %s", endpoint, string(body))
 	}
 	if resp.StatusCode != 200 {
 		if debugMode {
@@ -118,23 +154,48 @@ func getModels(backendURL, apiKey string) ([]string, error) {
 		}
 		return nil, fmt.Errorf("non-200 status: %s, body: %s", resp.Status, string(body))
 	}
+	
+	// Try different JSON structures for models response
+	var models []string
+	
+	// First try the standard format {"data": [{"id": "model-name"}]}
 	var result struct {
 		Data []struct {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
 	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		models = make([]string, len(result.Data))
+		for i, m := range result.Data {
+			models[i] = m.ID
+		}
+		if debugMode {
+			log.Printf("Fetched models from %s (standard format): %v", endpoint, models)
+		}
+		return models, nil
 	}
-	models := make([]string, len(result.Data))
-	for i, m := range result.Data {
-		models[i] = m.ID
+	
+	// If that fails, try vLLM format {"object": "list", "data": [{"id": "model-name", "object": "model"}]}
+	var vllmResult struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
-	if debugMode {
-		log.Printf("Fetched models from %s: %v", backendURL, models)
+	err = json.Unmarshal(body, &vllmResult)
+	if err == nil {
+		models = make([]string, len(vllmResult.Data))
+		for i, m := range vllmResult.Data {
+			models[i] = m.ID
+		}
+		if debugMode {
+			log.Printf("Fetched models from %s (vLLM format): %v", endpoint, models)
+		}
+		return models, nil
 	}
-	return models, nil
+	
+	// If both fail, return error
+	return nil, fmt.Errorf("failed to parse models from %s", endpoint)
 }
 
 func getCurrentModels(litellmURL, litellmApiKey string) ([]CurrentModelEntry, error) {
@@ -392,7 +453,7 @@ func main() {
 				}
 			}
 
-			models, err := getModels(backend.URL, string(apiKey))
+			models, err := getModels(backend.URL, string(apiKey), backend.Type, backend.ModelsEndpoint)
 			if err != nil {
 				log.Printf("Error getting models from %s: %v", backend.Name, err)
 				continue
@@ -403,8 +464,23 @@ func main() {
 					continue // Skip models that don't match the regex
 				}
 
+				// Determine model name based on backend type and format
+				modelName := "openai/" + model
+				if backend.ModelFormat != "" {
+					// Replace {model} placeholder with actual model name
+					modelName = backend.ModelFormat
+					if strings.Contains(modelName, "{model}") {
+						modelName = strings.ReplaceAll(modelName, "{model}", model)
+					}
+				} else if backend.Type == "vllm" {
+					// For vLLM, LiteLLM expects "hosted_vllm/{model}" format
+					modelName = "hosted_vllm/" + model
+				} else if backend.Type == "ollama" {
+					modelName = "ollama/" + model
+				}
+				
 				litellmParams := map[string]interface{}{
-					"model":   "openai/" + model,
+					"model":   modelName,
 					"api_base": backend.URL,
 					"api_key":  string(apiKey),
 				}
@@ -434,6 +510,19 @@ func main() {
 				if overrideCaps := applyOverrides(model, backend.Overrides); overrideCaps != nil {
 					for k, v := range overrideCaps {
 						entry.ModelInfo[k] = v
+					}
+				}
+
+				// Merge GenericParams into LitellmParams
+				if backend.GenericParams != nil {
+					for k, v := range backend.GenericParams {
+						// Check if this key is already set in litellmParams
+						// If it's already set, don't override it
+						if _, exists := litellmParams[k]; !exists {
+							litellmParams[k] = v
+						} else {
+							log.Printf("Warning: GenericParam key '%s' conflicts with existing LitellmParam and will be skipped", k)
+						}
 					}
 				}
 
