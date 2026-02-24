@@ -13,6 +13,7 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 - **Capability Discovery**: Optionally enable discovery for each backend to automatically test and set model capabilities like tool use and vision.
 - **Regex Overrides**: Define regex patterns to manually set or override model capabilities, providing precise control over the configuration.
 - **Regex Filter**: Filter models by regex to only add matching models.
+- **Regex Rename**: Apply regex patterns to rename models before adding them to LiteLLM.
 - **LiteLLM Params defaults**: Specify defaults for litellm_params that will be added to the model configuration.
 - **Model Info defaults**: Specify defaults that will be added to the model_info section.
 - **Arbitrary Endpoint Support**: Added support for arbitrary endpoints beyond OpenAI-compatible ones, including vLLM, Ollama, and generic endpoints.
@@ -35,6 +36,7 @@ The ModelProvisioner is configured via a Kubernetes ConfigMap and Secrets. The C
 - Custom Models Endpoints: Add a `models_endpoint` field to specify a custom endpoint for fetching models (e.g., `/v1/models`).
 - Model Format: Add a `model_format` field to specify a custom model naming format, including `{model}` placeholder for dynamic replacement.
 - Generic Parameters: Add a `generic_params` section to specify arbitrary parameters to be passed to LiteLLM for any endpoint.
+- Regex Rename: Add a `regex_rename` section to specify regex patterns that will be applied to rename models before they are added to LiteLLM. This allows you to transform model names (e.g., changing "qwen2.5-coder-32b" to "qwen2.5-coder-7b"). Each entry contains a `regex` field (the pattern to match) and a `replace` field (the replacement string). Multiple rename rules can be applied in sequence.
 
 ## Note
 Enabling discovery will send test requests to the backend for each new model. Ensure that your backend can handle these requests without hitting rate limits or incurring excessive costs. Refer to `k8s/configmap.yaml` for an example configuration and update it with your backend details, including the discovery and overrides fields as needed.
