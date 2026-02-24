@@ -38,14 +38,6 @@ type Backend struct {
 	LiteLLMParamsDefaults map[string]interface{} `yaml:"litellm_params_defaults"`
 	// GenericParams allows specifying arbitrary parameters to be passed to LiteLLM
 	GenericParams map[string]interface{} `yaml:"generic_params,omitempty"`
-	// RegexRename allows specifying regex patterns to rename models
-	RegexRename []RegexRename `yaml:"regex_rename,omitempty"`
-}
-
-// RegexRename defines a regex pattern for renaming models
-type RegexRename struct {
-	Regex   string `yaml:"regex"`
-	Replace string `yaml:"replace"`
 }
 
 // Override defines the override configuration for each backend
@@ -485,16 +477,6 @@ func main() {
 					modelName = "hosted_vllm/" + model
 				} else if backend.Type == "ollama" {
 					modelName = "ollama/" + model
-				}
-				
-				// Apply regex renaming if configured
-				for _, renameRule := range backend.RegexRename {
-					re, err := regexp.Compile(renameRule.Regex)
-					if err != nil {
-						log.Printf("Invalid regex in rename rule for backend %s: %v", backend.Name, err)
-						continue
-					}
-					modelName = re.ReplaceAllString(modelName, renameRule.Replace)
 				}
 				
 				litellmParams := map[string]interface{}{

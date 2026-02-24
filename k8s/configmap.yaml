@@ -43,12 +43,3 @@ data:
         generic_params:
           api_key: "another-special-key"
           custom_header: "another-value"
-      - name: backend-with-renaming
-        url: http://example-backend.llm.svc:8000
-        regex_rename:
-          - regex: "qwen2\\.5-coder-32b"
-            replace: "qwen2.5-coder-7b"
-          - regex: "gpt-4-turbo"
-            replace: "gpt-4"
-        model_info_defaults:
-          renamed_model: true
