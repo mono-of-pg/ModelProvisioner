@@ -494,11 +494,11 @@ func main() {
 						log.Printf("Invalid regex in rename rule for backend %s: %v", backend.Name, err)
 						continue
 					}
-					modelName = re.ReplaceAllString(modelName, renameRule.Replace)
+					model = re.ReplaceAllString(model, renameRule.Replace)
 				}
 				
 				litellmParams := map[string]interface{}{
-					"model":   modelName,
+					"model":   model,
 					"api_base": backend.URL,
 					"api_key":  string(apiKey),
 				}
