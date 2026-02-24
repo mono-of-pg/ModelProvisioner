@@ -515,7 +515,7 @@ func main() {
 				}
 
 				entry := DesiredModelEntry{
-					ModelName: model,
+					ModelName: modelName,
 					LitellmParams: litellmParams,
 					ModelInfo: make(map[string]interface{}),
 				}
