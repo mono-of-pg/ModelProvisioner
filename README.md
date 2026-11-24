@@ -13,6 +13,7 @@ This application dynamically configures [LiteLLM](https://github.com/BerriAI/lit
 - **Capability Discovery**: Optionally enable discovery for each backend to automatically test and set model capabilities like tool use and vision.
 - **Regex Overrides**: Define regex patterns to manually set or override model capabilities, providing precise control over the configuration.
 - **Regex Filter**: Filter models by regex to only add matching models.
+- **Model Replacements**: Replace parts of the LiteLLM model string by regex, e.g. swap the provider prefix for specific models ("openai/bge-rerank" to "infinity/bge-rerank").
 - **LiteLLM Params defaults**: Specify defaults for litellm_params that will be added to the model configuration.
 - **Model Info defaults**: Specify defaults that will be added to the model_info section.
 - **Arbitrary Endpoint Support**: Added support for arbitrary endpoints beyond OpenAI-compatible ones, including vLLM, Ollama, and generic endpoints.
@@ -35,6 +36,7 @@ The ModelProvisioner is configured via a Kubernetes ConfigMap and Secrets. The C
 - Custom Models Endpoints: Add a `models_endpoint` field to specify a custom endpoint for fetching models (e.g., `/v1/models`).
 - Model Format: Add a `model_format` field to specify a custom model naming format, including `{model}` placeholder for dynamic replacement.
 - Generic Parameters: Add a `generic_params` section to specify arbitrary parameters to be passed to LiteLLM for any endpoint.
+- Model Replacements: Add a `model_replacements` section to each backend, containing a list of regex patterns and replacement strings that are applied to the LiteLLM model string (litellm_params.model) after model naming. This allows flexible replacement for specific models, e.g. turning "openai/bge-rerank" into "infinity/bge-rerank" on an endpoint that serves multiple models. Capture groups are supported (`regex: "^openai/(.*rerank.*)$"`, `replace: "infinity/$1"`). The model_name registered in LiteLLM remains the backend's model name.
 
 ## Note
 Enabling discovery will send test requests to the backend for each new model. Ensure that your backend can handle these requests without hitting rate limits or incurring excessive costs. Refer to `k8s/configmap.yaml` for an example configuration and update it with your backend details, including the discovery and overrides fields as needed.

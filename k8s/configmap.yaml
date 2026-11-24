@@ -43,3 +43,8 @@ data:
         generic_params:
           api_key: "another-special-key"
           custom_header: "another-value"
+      - name: infinity
+        url: http://infinity.llm.svc:8000
+        model_replacements:
+          - regex: "^openai/(.*rerank.*)$"
+            replace: "infinity/$1"
