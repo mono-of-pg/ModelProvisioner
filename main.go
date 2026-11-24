@@ -38,6 +38,14 @@ type Backend struct {
 	LiteLLMParamsDefaults map[string]interface{} `yaml:"litellm_params_defaults"`
 	// GenericParams allows specifying arbitrary parameters to be passed to LiteLLM
 	GenericParams map[string]interface{} `yaml:"generic_params,omitempty"`
+	// ModelReplacements allows replacing the LiteLLM model string via regex, e.g. "openai/bge-rerank" -> "infinity/bge-rerank"
+	ModelReplacements []ModelReplacement `yaml:"model_replacements,omitempty"`
+}
+
+// ModelReplacement defines a regex pattern to replace parts of the LiteLLM model string
+type ModelReplacement struct {
+	Regex   string `yaml:"regex"`
+	Replace string `yaml:"replace"`
 }
 
 // Override defines the override configuration for each backend
@@ -477,6 +485,18 @@ func main() {
 					modelName = "hosted_vllm/" + model
 				} else if backend.Type == "ollama" {
 					modelName = "ollama/" + model
+				}
+
+				// Apply model replacements to the LiteLLM model string, leaving model_name untouched.
+				// Patterns may target specific models on backends serving multiple models, e.g.
+				// regex: "^openai/(.*rerank.*)$" replace: "infinity/$1"
+				for _, replacement := range backend.ModelReplacements {
+					re, err := regexp.Compile(replacement.Regex)
+					if err != nil {
+						log.Printf("Invalid model replacement regex for backend %s: %v", backend.Name, err)
+						continue
+					}
+					modelName = re.ReplaceAllString(modelName, replacement.Replace)
 				}
 				
 				litellmParams := map[string]interface{}{
